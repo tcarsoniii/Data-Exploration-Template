@@ -1,0 +1,248 @@
+---
+title: "Data Exploration - Chapter XXXX"
+author: "Your Name"
+date: '`r format(lubridate::today(), "%B %d, %Y")`'
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    df_print: paged
+    theme: journal
+    highlight: tango
+    code_folding: hide
+params:
+  series_search_text: "population"
+  data_3: "yyy"
+  data_4: "zzz"
+  data_5: "mmm"
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, 
+                      options(digits = 3, 
+                              scipen = 999))
+library(tidyverse)
+library(fredr)
+```
+
+# Chapter XXXX 
+
+### 1 - What's it all about?!
+
+Type your response to the question here...in this space...right where these words are... just like you would in a word document or any other word processing program.
+
+```{r include=FALSE}
+# Use this first chunk to "set" your API key.
+# Use fredr_set_key and put your API key into the parentheses and in quotation marks as shown. 
+
+fredr_set_key("27bd08c56e8be777ea9705d29146d1b3")
+
+# make sure you run this chunk, otherwise you will not be able to use fredr.
+```
+
+```{r include=FALSE}
+# This chunk searches FRED for the ID of the series you might want according to a keyword you enter.
+# For example, if you put "population" in the parameter above (on line 14), and then run this chunk, you will observe all of the data series that match.
+# You can change the keyword by changing it above in the parameter section.
+
+fredr_series_search_text(params$series_search_text)
+```
+
+```{r include=FALSE}
+# So you found a relevant series ID. Now we want to gather the data for that series. 
+# Let's stick with population and use "POP". 
+# Run the following code to collect the data from FRED and assign it to a name related to that data. For example, I am going to assign "pop" the fredr code that collects the data on population and places it in a data frame.
+# The leftward arrow is the assignment operator.
+
+# here is the code to gather data on population (measured in thousands) in the United States
+
+pop <- 
+  fredr(series_id = "POP") %>% 
+  data.frame()
+```
+
+```{r echo=FALSE}
+# Now we can start graphing the data
+# With most of the data from fredr, we will stick with an x-value of "date" and a y-value of "value"
+
+pop %>% 
+  ggplot(aes(x = date, y = value)) +
+  # add_rec_shade(min(real_gdp_new$date), max(real_gdp_new$date)) +
+  geom_line() +
+  geom_hline(yintercept = 0) +
+  theme_classic() +
+  labs(title = "Population, 1952-2020") +
+  theme(axis.title = element_blank(),
+        text = element_text(family = "Times New Roman"))
+```
+
+### 2 - Let's say you are asked to find the percent change from a year ago
+
+You still type your answers to the question here. or here and here. or even in this space too!
+
+```{r include=FALSE}
+# Sticking with population and pop, let's say we want to see the percent change from a year ago of the population. 
+# First, recall the percent chnge formula, i.e., (new - old)/old.
+# The following code transforms the data you want into percent change from a year ago (assuming the data is monthly)
+# Note that this assumes the data is monthly like the data for population. This is why the "slideBy" code is 12.
+# A series that is quarterly would slide back by 4 units.
+
+pop_new <-
+  pop %>% 
+  DataCombine::slide("value", 
+                     NewVar = "pop_lag", 
+                     slideBy = -12) %>% 
+  mutate(pop_percent_change = (value-pop_lag)/pop_lag)
+```
+
+```{r include=FALSE}
+# More on the code from the previous chunk:
+
+# This code actually creates two "new" variables. The first, "pop_lag", is the population data lagged by some period of time---in this case it is one year (or 12 months).
+
+# The second, "pop_percent_change" is the population measured as a percent change from a year ago.
+
+# You could also create your own *function* for the yearly percent change---to simplify the process going forward---but I will leave this to you to figure out. For now, you can always copy and paste this code.
+```
+
+```{r echo=FALSE, warning=FALSE}
+# So here is the graph on population measured in terms of percent change from a year ago. 
+
+pop_new %>% 
+  ggplot(aes(x = date, y = pop_percent_change)) +
+  # add_rec_shade(min(real_gdp_new$date), max(real_gdp_new$date)) +
+  geom_line() +
+  geom_hline(yintercept = 0) +
+  theme_classic() +
+  labs(title = "Population Growth, 1952-2020", y = "Percent change from a year ago") +
+    scale_y_continuous(labels = scales::label_percent(scale = 100,
+                                                      suffix = "%")) +
+  theme(axis.title.x = element_blank(),
+        text = element_text(family = "Times New Roman"))
+```
+
+### 3 - So you want to put two data series on the same graph
+
+What an interesting answer you have right here...
+
+```{r echo=FALSE}
+# We often want to observe and analyze multiple data series in relation to one another. 
+# We need to put them on the same graph. 
+# To do this combine the series into a single data frame.
+# For example, let's look at the M1 and M2 money stock.
+
+# We gather each data series from FRED
+
+M1_monthly <- 
+  fredr(series_id = "M1SL") %>% 
+  data.frame()
+M2_monthly <- 
+  fredr(series_id = "M2SL") %>% 
+  data.frame()
+
+# Combine by using inner_join and pivot_longer
+combine_money_stock <- 
+  M1_monthly %>% 
+  inner_join(M2_monthly, by = "date") %>% 
+  # Most of the series we gather from fredr will have a date variable.
+  # Remember to make sure the dates are consistent with each other, e.g., each series you combine should have the same units of measurement.
+  rename(m1 = value.x,
+         m2 = value.y) %>% 
+  pivot_longer(cols = c("m1", "m2"),
+               names_to = "money_stock",
+               values_to = "dollars")
+
+# Graph
+
+combine_money_stock %>% 
+  ggplot(aes(x = date, y = dollars, color = factor(money_stock))) +
+  geom_line() +
+  geom_hline(yintercept = 0) +
+  theme_classic() +
+  labs(title = "M1 and M2 Money Stock, 1960-2020", y = "Billions of Dollars") +
+  theme(axis.title.x = element_blank(),
+        text = element_text(family = "Times New Roman"), 
+        legend.title = element_blank())
+
+# You can combine as many data series as you want, but follow the format shown above.
+```
+
+### 4 - Sometimes you might want to include recession shading
+
+What a lovely recession you have there.
+
+```{r include=FALSE}
+# This entire chunk is code used to create a function that you can add to a graph so it highlights when a recession begins and ends. 
+
+fredr_series_search_text("recession")
+
+
+add_rec_shade <- function(start_date, end_date, shade_color = "lightblue")
+{
+  library(ecm)
+  library(fredr)
+  library(ggplot2)
+  
+start_date <- as.Date("1947-01-01")
+end_date <- as.Date(Sys.Date())
+  
+recession <- 
+  fredr::fredr(series_ = "USRECD", 
+                   observation_start = as.Date(start_date),
+                   observation_end = as.Date(end_date))
+
+recession$diff <- recession$value - lagpad(recession$value, k = 1)
+  
+recession <- recession[!is.na(recession$diff),]
+  
+recession.start <- recession[recession$diff == 1, ]$date
+  
+recession.end <- recession[recession$diff==(-1),]$date
+  
+if(length(recession.start) > length(recession.end))
+{recession.end <- c(recession.end, Sys.Date())}
+  
+if(length(recession.end) > length(recession.start))
+{recession.start <- c(min(recession$date), recession.start)}
+  
+recs <- as.data.frame(cbind(recession.start,
+                            recession.end))
+  
+recs$recession.start <- as.Date(as.numeric(recs$recession.start), 
+                                origin = as.Date("1970-01-01"))
+  
+  recs$recession.end <- as.Date(as.numeric(recs$recession.end), 
+                              origin = as.Date("1970-01-01"))
+  
+  if(nrow(recs) > 0)
+    {
+    rec_shade <- geom_rect(data = recs, 
+                         inherit.aes = FALSE,
+                         aes(xmin = recession.start, 
+                             xmax = recession.end,
+                             ymin = -Inf, 
+                             ymax = +Inf),
+                         fill = shade_color, 
+                         alpha = .5)
+    return(rec_shade)
+  }
+}
+```
+
+```{r echo=FALSE, warning=FALSE}
+# When you want to use it just add the code "add_rec_shade" into a graphing chunk
+
+# For example, lets add it to the graph on population
+
+pop_new %>% 
+  ggplot(aes(x = date, y = pop_percent_change)) +
+  # add the function here like this
+  add_rec_shade(min(real_gdp_new$date), max(real_gdp_new$date)) +
+  geom_line() +
+  geom_hline(yintercept = 0) +
+  theme_classic() +
+  labs(title = "Population Growth, 1952-2020", y = "Percent change from a year ago") +
+    scale_y_continuous(labels = scales::label_percent(scale = 100,
+                                                      suffix = "%")) +
+  theme(axis.title.x = element_blank(),
+        text = element_text(family = "Times New Roman"))
+```
